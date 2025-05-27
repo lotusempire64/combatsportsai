@@ -132,16 +132,19 @@ def analyze_video(file_path):
     )
 
     try:
-         response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        response = client.chat.completions.create(
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are an experienced combat sports coach providing specific, actionable feedback. Focus on technique and form."},
+            {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
-        ]
+        ],
+        temperature=0.7,
+        max_tokens=1000,
     )
     return response.choices[0].message.content
 except Exception as e:
-    return f"Error generating feedback: {str(e)}"
+    print("Error generating feedback:", e)
+    return "Sorry, something went wrong while generating feedback."
 
 @app.route("/", methods=["GET", "POST"])
 def index():
