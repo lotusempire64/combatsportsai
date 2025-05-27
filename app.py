@@ -132,16 +132,16 @@ def analyze_video(file_path):
     )
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an experienced combat sports coach providing specific, actionable feedback. Focus on technique and form."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Error generating feedback: {str(e)}"
+         response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are an experienced combat sports coach providing specific, actionable feedback. Focus on technique and form."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response.choices[0].message.content
+except Exception as e:
+    return f"Error generating feedback: {str(e)}"
 
 @app.route("/", methods=["GET", "POST"])
 def index():
