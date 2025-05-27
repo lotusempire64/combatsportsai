@@ -1,0 +1,18 @@
+
+<!doctype html>
+<html>
+<head>
+  <title>Muay Thai Trainer</title>
+</head>
+<body style="font-family:sans-serif;text-align:center;">
+  <h1>Upload Your Muay Thai Training Video</h1>
+  <form action="/" method="POST" enctype="multipart/form-data">
+    <input type="file" name="video" accept="video/*" required><br><br>
+    <button type="submit">Analyze</button>
+  </form>
+  {% if feedback %}
+    <h2>AI Feedback</h2>
+    <p style="white-space: pre-wrap;">{{ feedback }}</p>
+  {% endif %}
+</body>
+</html>
