@@ -131,7 +131,7 @@ def analyze_video(file_path):
         f"Provide 3 specific strengths and 3 areas to improve based on these metrics. Be direct and technical in your feedback."
     )
     try:
-    response = client.chat.completions.create(
+        response = client.chat.completions.create(
         model="gpt-4",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
