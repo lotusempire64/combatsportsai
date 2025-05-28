@@ -130,21 +130,23 @@ def analyze_video(file_path):
         f"- Strike speed: {'Fast' if stats['speed_score'] > 0.15 else 'Medium' if stats['speed_score'] > 0.1 else 'Slow'}\n\n"
         f"Provide 3 specific strengths and 3 areas to improve based on these metrics. Be direct and technical in your feedback."
     )
+    try:
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=1000,
+    )
+    return response.choices[0].message.content
+except Exception as e:
+    print("Error generating feedback:", e)
+    return "Sorry, something went wrong while generating feedback."
 
-     try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful high level combat sports coach."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1000,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print("Error generating feedback:", e)
-        return "Sorry, something went wrong while generating feedback."
+    
+
 
 
 @app.route("/", methods=["GET", "POST"])
