@@ -1,10 +1,8 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_from_directory
 import os
 import cv2
 import mediapipe as mp
-import numpy as np
 import openai
-client = openai.OpenAI()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -52,10 +50,17 @@ def has_significant_change(current_landmarks, last_landmarks, threshold):
             return True
     return False
 
-def analyze_video(file_path):
-    cap = cv2.VideoCapture(file_path)
+def analyze_video(input_path, output_path):
+    cap = cv2.VideoCapture(input_path)
     frame_count = 0
     sample_interval = 15
+
+    # Prepare video writer for output video with dots
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     last_landmarks = None
     guard_height_samples = []
@@ -77,48 +82,57 @@ def analyze_video(file_path):
         ret, frame = cap.read()
         if not ret:
             break
-        image_rgb = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
+        frame = cv2.flip(frame, 1)
+        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(image_rgb)
 
-        if results.pose_landmarks and frame_count % sample_interval == 0:
-            landmarks = results.pose_landmarks.landmark
+        if results.pose_landmarks:
+            # Draw landmarks on frame
+            mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-            if last_landmarks is None or has_significant_change(landmarks, last_landmarks, 0.05):
-                if last_landmarks:
-                    avg_guard_y = (landmarks[mp_pose.PoseLandmark.LEFT_WRIST].y +
-                                   landmarks[mp_pose.PoseLandmark.RIGHT_WRIST].y) / 2
-                    guard_height_samples.append(avg_guard_y)
+            if frame_count % sample_interval == 0:
+                landmarks = results.pose_landmarks.landmark
 
-                    stance_width = abs(
-                        landmarks[mp_pose.PoseLandmark.LEFT_FOOT_INDEX].x -
-                        landmarks[mp_pose.PoseLandmark.RIGHT_FOOT_INDEX].x)
-                    stance_width_samples.append(stance_width)
+                if last_landmarks is None or has_significant_change(landmarks, last_landmarks, 0.05):
+                    if last_landmarks:
+                        avg_guard_y = (landmarks[mp_pose.PoseLandmark.LEFT_WRIST].y +
+                                       landmarks[mp_pose.PoseLandmark.RIGHT_WRIST].y) / 2
+                        guard_height_samples.append(avg_guard_y)
 
-                    wrist_speed = calculate_speed(landmarks, last_landmarks,
-                        [mp_pose.PoseLandmark.LEFT_WRIST, mp_pose.PoseLandmark.RIGHT_WRIST])
-                    if wrist_speed > 0.1:
-                        movement_patterns['combinations'].append(wrist_speed)
+                        stance_width = abs(
+                            landmarks[mp_pose.PoseLandmark.LEFT_FOOT_INDEX].x -
+                            landmarks[mp_pose.PoseLandmark.RIGHT_FOOT_INDEX].x)
+                        stance_width_samples.append(stance_width)
 
-                    head_movement = calculate_speed(landmarks, last_landmarks,
-                        [mp_pose.PoseLandmark.NOSE])
-                    if head_movement > 0.05:
-                        movement_patterns['head_movement'].append(head_movement)
+                        wrist_speed = calculate_speed(landmarks, last_landmarks,
+                            [mp_pose.PoseLandmark.LEFT_WRIST, mp_pose.PoseLandmark.RIGHT_WRIST])
+                        if wrist_speed > 0.1:
+                            movement_patterns['combinations'].append(wrist_speed)
 
-                    foot_movement = calculate_speed(landmarks, last_landmarks,
-                        [mp_pose.PoseLandmark.LEFT_ANKLE, mp_pose.PoseLandmark.RIGHT_ANKLE])
-                    if foot_movement > 0.05:
-                        movement_patterns['footwork'].append(foot_movement)
+                        head_movement = calculate_speed(landmarks, last_landmarks,
+                            [mp_pose.PoseLandmark.NOSE])
+                        if head_movement > 0.05:
+                            movement_patterns['head_movement'].append(head_movement)
 
-                last_landmarks = landmarks
+                        foot_movement = calculate_speed(landmarks, last_landmarks,
+                            [mp_pose.PoseLandmark.LEFT_ANKLE, mp_pose.PoseLandmark.RIGHT_ANKLE])
+                        if foot_movement > 0.05:
+                            movement_patterns['footwork'].append(foot_movement)
 
+                    last_landmarks = landmarks
+
+        out.write(frame)
         frame_count += 1
+
     cap.release()
+    out.release()
 
     if len(guard_height_samples) > 0:
         stats['avg_guard_height'] = sum(guard_height_samples) / len(guard_height_samples)
         stats['stance_width'] = sum(stance_width_samples) / len(stance_width_samples)
         stats['movement_score'] = len(movement_patterns['footwork'])
-        stats['speed_score'] = sum(movement_patterns['combinations']) / len(movement_patterns['combinations']) if movement_patterns['combinations'] else 0
+        stats['speed_score'] = (sum(movement_patterns['combinations']) / len(movement_patterns['combinations'])
+                                if movement_patterns['combinations'] else 0)
         stats['defense_score'] = len(movement_patterns['head_movement'])
 
     prompt = (
@@ -131,35 +145,44 @@ def analyze_video(file_path):
         f"- Strike speed: {'Fast' if stats['speed_score'] > 0.15 else 'Medium' if stats['speed_score'] > 0.1 else 'Slow'}\n\n"
         f"Provide 3 specific strengths and 3 areas to improve based on these metrics. Be direct and technical in your feedback."
     )
+
     try:
-        response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=1000,
-    )
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1000,
+        )
         return response.choices[0].message.content
     except Exception as e:
         print("Error generating feedback:", e)
         return "Sorry, something went wrong while generating feedback."
 
-    
-
-
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     feedback = None
+    processed_video_url = None
     if request.method == "POST":
-        file = request.files["video"]
+        file = request.files.get("video")
         if file:
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            filename = file.filename
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-            feedback = analyze_video(filepath)
-    return render_template("index.html", feedback=feedback)
+
+            processed_filename = f"processed_{filename}"
+            processed_path = os.path.join(app.config['UPLOAD_FOLDER'], processed_filename)
+
+            feedback = analyze_video(filepath, processed_path)
+            processed_video_url = f"/uploads/{processed_filename}"
+
+    return render_template("index.html", feedback=feedback, video_url=processed_video_url)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
