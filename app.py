@@ -48,16 +48,18 @@ def analyze_video(video_path):
     pose.close()
 
     prompt = (
-        "Analyze this Muay Thai training video based on pose landmarks extracted. "
-        "Provide 3 strengths and 3 areas for improvement focusing on technique, defense, and movement. "
-        "Be technical and direct."
+        "You are analyzing pose landmarks extracted from a combat sports training video. "
+        "Based on the movement patterns and joint positions, automatically identify the combat sport (e.g., Muay Thai, Boxing, MMA, Kickboxing). "
+        "Then provide 3 specific technical strengths and 3 areas to improve tailored to the identified sport. "
+        "If unsure about the sport, give general combat sports feedback. "
+        "Focus on technique, defense, footwork, and striking efficiency. Be direct and technical."
     )
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": "You are a helpful assistant that can identify combat sports from pose data."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
