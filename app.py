@@ -9,13 +9,11 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Set OpenAI API Key in the environment before running app
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client exactly as you did
+client = openai.OpenAI()
 
-# Mediapipe pose initialization
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-mp_drawing = mp.solutions.drawing_utils
 
 def calculate_speed(current_landmarks, last_landmarks, points):
     total_speed = 0
@@ -76,7 +74,6 @@ def analyze_video(file_path):
         ret, frame = cap.read()
         if not ret:
             break
-        # Flip frame horizontally and convert BGR to RGB for MediaPipe
         image_rgb = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
         results = pose.process(image_rgb)
 
@@ -133,8 +130,7 @@ def analyze_video(file_path):
     )
 
     try:
-        # Use openai.ChatCompletion with your API key set via environment variable
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -143,7 +139,7 @@ def analyze_video(file_path):
             temperature=0.7,
             max_tokens=1000,
         )
-        return response.choices[0].message['content']
+        return response.choices[0].message.content
     except Exception as e:
         print("Error generating feedback:", e)
         return "Sorry, something went wrong while generating feedback."
@@ -159,7 +155,7 @@ def index():
             file.save(filepath)
             feedback = analyze_video(filepath)
             try:
-                os.remove(filepath)  # Clean up uploaded file after processing
+                os.remove(filepath)
             except Exception as e:
                 print("Error deleting file:", e)
     return render_template("index.html", feedback=feedback)
@@ -167,3 +163,4 @@ def index():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
