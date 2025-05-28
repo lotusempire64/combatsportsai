@@ -141,7 +141,7 @@ def analyze_video(file_path):
         max_tokens=1000,
     )
     return response.choices[0].message.content
-except Exception as e:
+    except Exception as e:
     print("Error generating feedback:", e)
     return "Sorry, something went wrong while generating feedback."
 
