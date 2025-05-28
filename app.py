@@ -46,15 +46,21 @@ def analyze_video(video_path):
 
     cap.release()
     pose.close()
-  prompt = (
-        f"As a combat sports coach, analyze these training metrics:\n"
-        f"- Number of strikes: {len(movement_patterns['combinations'])}\n"
-        f"- Defensive movements: {stats['defense_score']}\n"
-        f"- Footwork activity: {stats['movement_score']}\n"
+
+    prompt = (
+        f"As a combat sports coach, analyze these training metrics from a pose-estimated video. "
+        f"The metrics below were computed using joint movement speeds and spatial positions. "
+        f"Note: Some joint data may include unnatural or impossible movements due to tracking glitches. "
+        f"Ignore such anomalies and provide feedback based on plausible patterns only.\n\n"
+        f"- Number of strikes (wrist speed bursts): {len(movement_patterns['combinations'])}\n"
+        f"- Defensive movements (head movement bursts): {stats['defense_score']}\n"
+        f"- Footwork activity (ankle motion bursts): {stats['movement_score']}\n"
         f"- Average guard height: {'High' if stats['avg_guard_height'] < 0.4 else 'Medium' if stats['avg_guard_height'] < 0.6 else 'Low'}\n"
         f"- Stance width: {'Wide' if stats['stance_width'] > 0.4 else 'Narrow'}\n"
         f"- Strike speed: {'Fast' if stats['speed_score'] > 0.15 else 'Medium' if stats['speed_score'] > 0.1 else 'Slow'}\n\n"
-        f"Provide 3 specific strengths and 3 areas to improve based on these metrics. Be direct and technical in your feedback."
+        f"Based on this data, provide 3 technical strengths and 3 areas for improvement. "
+        f"If data seems unreliable or erratic, explain why and suggest how to improve data quality. "
+        f"Be direct, specific, and technical in your feedback."
     )
 
     try:
