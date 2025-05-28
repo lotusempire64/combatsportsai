@@ -140,10 +140,10 @@ def analyze_video(file_path):
         temperature=0.7,
         max_tokens=1000,
     )
-    return response.choices[0].message.content
+        return response.choices[0].message.content
     except Exception as e:
-    print("Error generating feedback:", e)
-    return "Sorry, something went wrong while generating feedback."
+        print("Error generating feedback:", e)
+        return "Sorry, something went wrong while generating feedback."
 
     
 
