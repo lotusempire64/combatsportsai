@@ -4,6 +4,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import openai
+client = openai.OpenAI()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
