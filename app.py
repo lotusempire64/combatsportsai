@@ -48,18 +48,29 @@ def analyze_video(video_path):
     pose.close()
 
     prompt = (
-        "You are analyzing pose landmarks extracted from a combat sports training video. "
-        "Based on the movement patterns and joint positions, automatically identify the combat sport (e.g., Muay Thai, Boxing, MMA, Kickboxing). "
-        "Then provide 3 specific technical strengths and 3 areas to improve tailored to the identified sport. "
-        "If unsure about the sport, give general combat sports feedback. "
-        "Focus on technique, defense, footwork, and striking efficiency. Be direct and technical."
-    )
+    "You are analyzing pose landmarks extracted from a combat sports training video. "
+    "Based on the joint positions, movement speeds, and spatial patterns, identify the likely combat sport (e.g., Muay Thai, Boxing, MMA, Kickboxing). "
+    "Then provide tailored feedback for that sport.\n\n"
+    "IMPORTANT:\n"
+    "- Only base your analysis on visible pose movement and positions.\n"
+    "- Do NOT mention clinch work, grappling, or submissions unless clearly evident from the joint movement data.\n"
+    "- If visibility is poor or the data seems noisy, say so briefly.\n\n"
+    "FEEDBACK FORMAT:\n"
+    "Strengths:\n"
+    "- Point 1\n"
+    "- Point 2\n"
+    "- Point 3\n\n"
+    "Areas to Improve:\n"
+    "- Point 1\n"
+    "- Point 2\n"
+    "- Point 3\n"
+)
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that can identify combat sports from pose data."},
+                {"role": "system", "content": "You are a combat sports coach and technical movement analyst. Only analyze based on actual pose and motion data. Do not invent events or unseen details."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
