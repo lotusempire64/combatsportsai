@@ -3,6 +3,8 @@ import os
 import cv2
 import mediapipe as mp
 import openai
+import numpy as np
+from scipy.ndimage import gaussian_filter1d
 
 client = openai.OpenAI()
 
@@ -12,7 +14,6 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
-
 
 def analyze_video(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -35,36 +36,58 @@ def analyze_video(video_path):
         if results.pose_landmarks:
             frame_landmarks = []
             for i, lm in enumerate(results.pose_landmarks.landmark):
-                frame_landmarks.append({
-                    'id': i,
-                    'x': lm.x,
-                    'y': lm.y,
-                    'z': lm.z,
-                    'visibility': lm.visibility
-                })
-            pose_data.append(frame_landmarks)
+                if lm.visibility > 0.6:
+                    frame_landmarks.append([lm.x, lm.y, lm.z])
+            if frame_landmarks:
+                pose_data.append(frame_landmarks)
 
     cap.release()
     pose.close()
 
+    # Smooth the landmark coordinates
+    smoothed_pose_data = []
+    for frame in pose_data:
+        if len(frame) > 0:
+            smoothed = gaussian_filter1d(np.array(frame), sigma=1, axis=0)
+            smoothed_pose_data.append(smoothed.tolist())
+
+    # Detect movement based on ankle joint motion
+    def calculate_speed(joint_series):
+        speeds = []
+        for i in range(1, len(joint_series)):
+            prev = np.array(joint_series[i - 1])
+            curr = np.array(joint_series[i])
+            dist = np.linalg.norm(curr - prev)
+            speeds.append(dist)
+        return speeds
+
+    left_ankle_series = [frame[27] for frame in smoothed_pose_data if len(frame) > 28]  # Left ankle
+    right_ankle_series = [frame[28] for frame in smoothed_pose_data if len(frame) > 28] # Right ankle
+
+    footwork_speeds = calculate_speed(left_ankle_series) + calculate_speed(right_ankle_series)
+    avg_footwork_speed = np.mean(footwork_speeds) if footwork_speeds else 0
+
+    footwork_detected = avg_footwork_speed > 0.01  # Basic threshold
+
     prompt = (
-    "You are analyzing pose landmarks extracted from a combat sports training video. "
-    "Based on the joint positions, movement speeds, and spatial patterns, identify the likely combat sport (e.g., Muay Thai, Boxing, MMA, Kickboxing). "
-    "Then provide tailored feedback for that sport.\n\n"
-    "IMPORTANT:\n"
-    "- Only base your analysis on visible pose movement and positions.\n"
-    "- Do NOT mention clinch work, grappling, or submissions unless clearly evident from the joint movement data.\n"
-    "- If visibility is poor or the data seems noisy, say so briefly.\n\n"
-    "FEEDBACK FORMAT:\n"
-    "Strengths:\n"
-    "- Point 1\n"
-    "- Point 2\n"
-    "- Point 3\n\n"
-    "Areas to Improve:\n"
-    "- Point 1\n"
-    "- Point 2\n"
-    "- Point 3\n"
-)
+        "You are analyzing pose landmarks extracted from a combat sports training video. "
+        "Based on the joint positions, movement speeds, and spatial patterns, identify the likely combat sport (e.g., Muay Thai, Boxing, MMA, Kickboxing). "
+        "Then provide tailored feedback for that sport.\n\n"
+        "IMPORTANT:\n"
+        "- Only base your analysis on visible pose movement and positions.\n"
+        "- Do NOT mention clinch work, grappling, or submissions unless clearly evident from the joint movement data.\n"
+        "- If visibility is poor or the data seems noisy, say so briefly.\n\n"
+        f"Footwork activity detected: {'Yes' if footwork_detected else 'No'}\n\n"
+        "FEEDBACK FORMAT:\n"
+        "Strengths:\n"
+        "- Point 1\n"
+        "- Point 2\n"
+        "- Point 3\n\n"
+        "Areas to Improve:\n"
+        "- Point 1\n"
+        "- Point 2\n"
+        "- Point 3\n"
+    )
 
     try:
         response = client.chat.completions.create(
@@ -80,7 +103,6 @@ def analyze_video(video_path):
     except Exception as e:
         print("Error generating feedback:", e)
         return "Sorry, something went wrong while generating feedback."
-
 
 def gen_frames(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -107,7 +129,6 @@ def gen_frames(video_path):
     cap.release()
     pose.close()
 
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     feedback = None
@@ -123,7 +144,6 @@ def index():
 
     return render_template("index.html", feedback=feedback, video_filename=video_filename)
 
-
 @app.route("/video_feed/<filename>")
 def video_feed(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -132,7 +152,7 @@ def video_feed(filename):
     return Response(gen_frames(filepath),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
